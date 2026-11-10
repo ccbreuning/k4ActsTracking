@@ -62,4 +62,11 @@ namespace LUXE_v0 {
 }
 } // namespace LUXE
 
+namespace Lohengrin {
+namespace Lohengrin_v0 {
+  void populateBlueprint(const std::string& detName, Acts::Blueprint& root,
+                         ActsPlugins::DD4hep::BlueprintBuilder& builder, const IActsGeoSvc::CaloFaceSurfaces& calo);
+}
+} // namespace Lohengrin
+
 #endif // K4ACTSTRACKING_DD4HEPBLUEPRINTCONSTRUCTION_H

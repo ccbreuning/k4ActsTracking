@@ -1200,3 +1200,34 @@ namespace LUXE_v0 {
   }
 } // namespace LUXE_v0
 } // namespace LUXE
+
+namespace Lohengrin {
+namespace Lohengrin_v0 {
+  void populateBlueprint(const std::string& detName, Acts::Blueprint& root,
+                         ActsPlugins::DD4hep::BlueprintBuilder& builder, const IActsGeoSvc::CaloFaceSurfaces& calo) {
+    // Lohengrin has a telescope-like geometry: the tracker planar layers are
+    // stacked along the beam (z) axis, and the electromagnetic calorimeter is
+    // a single rectangular slab downstream. Both live in a cuboid container
+    // stacked along z (the calo cuboid sits behind the tracker layers).
+    auto& tracker = root.addCuboidContainer(detName, AxisZ);
+    std::cout << "Populating Blueprint" << std::endl;
+    auto envelope =
+        Acts::ExtentEnvelope{}.set(AxisZ, {0.4_mm, 0.4_mm}).set(AxisX, {0.4_mm, 0.4_mm}).set(AxisY, {0.4_mm, 0.4_mm});
+
+    builder.layers()
+        .planar()
+        .setSensorAxes("XYZ")
+        .setLayerFilter("layer\\d")
+        .setContainer("RecoilTracker")
+        .setEnvelope(envelope)
+        .setAttachmentStrategy(Acts::VolumeAttachmentStrategy::Gap)
+        // Force the layer volumes onto the beam axis (x = y = 0) so they share
+        // a common transverse center with the calo volume for the z-stack.
+        .onLayer(Blueprints::unsetXYCoG)
+        .addTo(tracker);
+
+    // Insert the ECAL front face as an extrapolation target, if it was built.
+    Blueprints::addCaloPlanarFace(tracker, calo);
+  }
+} // namespace Lohengrin_v0
+} // namespace Lohengrin
