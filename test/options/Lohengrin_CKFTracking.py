@@ -32,19 +32,13 @@ from _ckf_helpers import (
     make_services,
     make_hit_mergers,
 )
-# Use the real DD4hep field so ACTS accounts for the localized LUXE dipole when
-# extrapolating back to the IP (the tracker itself is field-free).
+# Use the real DD4hep field so ACTS accounts for the localized Lohengrin magnet
 svcList = make_services(use_dd4hep_field=True)
 iosvc = IOSvc("IOSvc")
 
-iosvc.Input = "/cephfs/user/cbreunin/data/Detector-Simulation/steering_output.edm4hep.root"
-iosvc.Output = "/cephfs/user/cbreunin/data/Detector-Simulation/steering_output_reco.edm4hep.root"
-
 algList = []
 
-# The LUXE_v0 geometry has a single planar tracker (DD4hep detector "Tracker")
-# whose sensitive hits end up in the "SiHits" SimTrackerHit collection (named
-# after the "SiHits" readout). Digitize those into space points for the CKF.
+# Lohengrin has a tag and a recoil tracker. This is the recoil tracking and digitization
 algList.append(
     DDPlanarDigi(
         "TrackerDigitizer",
@@ -53,11 +47,7 @@ algList.append(
         ResolutionT=[0.03],
         ResolutionU=[0.007],
         ResolutionV=[0.007],
-        # The LUXE "SiHits" readout encodes a fine CartesianGridXY (the x/y
-        # segmentation sits in bits 32-63), while the DD4hep surface map is keyed
-        # at sensor level (system:1,side:1,layer:2,module:1,sensor:5 -> bits 0-9).
-        # DDPlanarDigi looks up the surface with the *full* cellID, so mask it to
-        # the low 32 bits to drop the segmentation and match the surface volumeID.
+        # The readout of the sensors sits in the last 32 bits (x:32:-16,y:-16)
         CellIDBits=32,
         SimTrackHitCollectionName=["RecoilTrackerHits"],
         SimTrkHitRelCollection=["RecoilTrackerHitsRelations"],
@@ -71,14 +61,11 @@ hit_merger, hit_rel_merger = make_hit_mergers(
 )
 algList.extend([hit_merger, hit_rel_merger])
 
-# LUXE's tracker sits in a field-free region (the dipole is localized upstream),
-# so the collider helix seeder finds nothing. Use the straight-line telescope
-# seeder instead; this configuration does not affect the barrel/collider clients.
+# Adding the CKF Tracker
 ckf_tracking = make_telescope_ckf_tracking(
     hit_merger,
     hit_rel_merger,
-    # LUXE is a four-layer (layer:0..3) telescope; use all of them as the pool
-    # of seed space points. Omitted cellID fields act as wildcards.
+    # Use all 6 layers of the recoil tracker for seeding for now
     seeding_cellids=["layer:1|2|3|4|5|6"],
     nominal_momentum=3.2,
     reference_z=1900,
