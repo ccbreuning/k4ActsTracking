@@ -930,6 +930,37 @@ void addCaloPlanarFace(BlueprintNode& parent, const IActsGeoSvc::CaloFaceSurface
   parent.addStaticVolume(std::move(vol)).setNavigationPolicyFactory(makeCaloNavigationPolicyFactory());
 }
 
+/// In Lohengrin we have multiple telescope trackers chained along the Z axis.
+/// This adds a new tracker along the Z axis to the existing builder
+///
+/// @param parent     The Parent node where we add the tracker to
+/// @param builder    The Blueprint Builder where we add this tracker to
+/// @param envelope   Envelope
+/// @param name       Name of the new container we add
+/// @param container  Name of the Container in DD4hep
+/// @param layer      Regex which chooses the layers in the DD4hep geometry
+///
+/// @returns The Blueprint node of the added tracker
+Acts::CuboidContainerBlueprintNode& addTelescopeTracker(Acts::BlueprintNode& parent,
+                                                        ActsPlugins::DD4hep::BlueprintBuilder& builder,
+                                                        const Acts::ExtentEnvelope& envelope, const std::string& name,
+                                                        const std::string& container, const std::string& layer) {
+
+  auto& telescopeTracker = parent.addCuboidContainer(name, AxisZ);
+
+  builder.layers()
+      .planar()
+      .setSensorAxes("XYZ")
+      .setLayerFilter(layer)
+      .setContainer(container)
+      .setEnvelope(envelope)
+      .setAttachmentStrategy(Acts::VolumeAttachmentStrategy::Gap)
+      .onLayer(Blueprints::unsetXYCoG) // keep all layers on x = y = 0
+      .addTo(telescopeTracker);
+
+  return telescopeTracker;
+}
+
 } // namespace Blueprints
 
 namespace MuColl {
@@ -1205,26 +1236,17 @@ namespace Lohengrin {
 namespace Lohengrin_v0 {
   void populateBlueprint(const std::string& detName, Acts::Blueprint& root,
                          ActsPlugins::DD4hep::BlueprintBuilder& builder, const IActsGeoSvc::CaloFaceSurfaces& calo) {
-    // Lohengrin has a telescope-like geometry: the tracker planar layers are
-    // stacked along the beam (z) axis, and the electromagnetic calorimeter is
-    // a single rectangular slab downstream. Both live in a cuboid container
-    // stacked along z (the calo cuboid sits behind the tracker layers).
+    // Lohengrin contains 2 trackers. One tag and one recoil tracker
+    // Both are (in itself) aligned along the z axis and the trackers
+    // are then also placed behind oneanother (tag before recoil) along the z axis
+    // First build the full tracker Container. Then add the two trackers as containers
     auto& tracker = root.addCuboidContainer(detName, AxisZ);
     std::cout << "Populating Blueprint" << std::endl;
     auto envelope =
         Acts::ExtentEnvelope{}.set(AxisZ, {0.4_mm, 0.4_mm}).set(AxisX, {0.4_mm, 0.4_mm}).set(AxisY, {0.4_mm, 0.4_mm});
 
-    builder.layers()
-        .planar()
-        .setSensorAxes("XYZ")
-        .setLayerFilter("layer\\d")
-        .setContainer("RecoilTracker")
-        .setEnvelope(envelope)
-        .setAttachmentStrategy(Acts::VolumeAttachmentStrategy::Gap)
-        // Force the layer volumes onto the beam axis (x = y = 0) so they share
-        // a common transverse center with the calo volume for the z-stack.
-        .onLayer(Blueprints::unsetXYCoG)
-        .addTo(tracker);
+    Blueprints::addTelescopeTracker(tracker, builder, envelope, "TagTracker", "TagTracker", "layer\\d");
+    Blueprints::addTelescopeTracker(tracker, builder, envelope, "RecoilTracker", "RecoilTracker", "layer\\d");
 
     // Insert the ECAL front face as an extrapolation target, if it was built.
     Blueprints::addCaloPlanarFace(tracker, calo);
