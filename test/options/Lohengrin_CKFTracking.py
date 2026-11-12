@@ -22,7 +22,7 @@ import os
 import sys
 
 from Gaudi.Configuration import INFO, DEBUG
-from Gaudi.Configurables import DDPlanarDigi
+from Gaudi.Configurables import DDPlanarDigi, CKFTrackingAlg
 from k4FWCore import ApplicationMgr, IOSvc
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -44,9 +44,9 @@ algList.append(
         "TrackerDigitizer",
         SubDetectorName="RecoilTracker",
         IsStrip=False,
-        ResolutionT=[0.03],
-        ResolutionU=[0.007],
-        ResolutionV=[0.007],
+        ResolutionT=[20],
+        ResolutionU=[0.055], # pitch / sqrt(12)
+        ResolutionV=[0.055], # pitch / sqrt(12)
         # The readout of the sensors sits in the last 32 bits (x:32:-16,y:-16)
         CellIDBits=32,
         SimTrackHitCollectionName=["RecoilTrackerHits"],
@@ -62,15 +62,32 @@ hit_merger, hit_rel_merger = make_hit_mergers(
 algList.extend([hit_merger, hit_rel_merger])
 
 # Adding the CKF Tracker
-ckf_tracking = make_telescope_ckf_tracking(
-    hit_merger,
-    hit_rel_merger,
-    # Use all 6 layers of the recoil tracker for seeding for now
-    seeding_cellids=["layer:1|2|3|4|5|6"],
-    nominal_momentum=3.2,
-    reference_z=1900,
-    layer_z_tolerance=1.0,
-)
+
+OUT = INFO
+N = -1
+
+ckf_tracking = CKFTrackingAlg(
+        "CKFTracking",
+        RunCKF=True,
+        CKF_Chi2CutOff=25,
+        CKF_NumMeasurementsCutOff=1,
+        SeedingSensorsCellIDs=["layer:1|2|3"],
+        OutputTrackCollection="CKFTracks",
+        OutputSeedCollection="CKFTrackSeeds",
+        InputTrackerHitCollection=hit_merger.OutputCollection,
+        InputTrackerHitRelationCollection=hit_rel_merger.OutputCollection,
+        OutputLevel=OUT,
+        SeedingMode="Telescope",
+        Telescope_LayerZTolerance=1.0,
+        Telescope_CollinearityCut=2.0,
+        Telescope_NominalMomentum=3.2,
+        Telescope_ReferenceZ=1900,
+        InitialTrackError_Pos=0.1,
+        # InitialTrackError_Phi=0.1,
+        # InitialTrackError_Lambda=0.1,
+        InitialTrackError_RelP=0.1
+    )
+
 algList.append(ckf_tracking)
 
-ApplicationMgr(TopAlg=algList, ExtSvc=svcList, OutputLevel=DEBUG, EvtSel="NONE", EvtMax=10)
+ApplicationMgr(TopAlg=algList, ExtSvc=svcList, OutputLevel=OUT, EvtSel="NONE", EvtMax=N)
